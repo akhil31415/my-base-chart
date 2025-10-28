@@ -1,0 +1,123 @@
+---
+# Source: privacera-base-chart/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-service-pdb
+  namespace: privacera
+  labels:
+    app: user-service
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: user-service
+    app.kubernetes.io/part-of: user-service
+    app.kubernetes.io/managed-by: Helm
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: user-service
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: privacera
+  labels:
+    app: user-service
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: user-service
+    app.kubernetes.io/part-of: user-service
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: user-service
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: privacera
+  labels:
+    app: user-service
+    app.kubernetes.io/name: user-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: user-service
+    app.kubernetes.io/part-of: user-service
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+        service-type: api
+        team: backend
+    spec:
+      
+      serviceAccountName: default
+      tolerations:
+        []
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: user-service
+      securityContext:
+        enabled: true
+        fsGroup: 200
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: user-service
+        image: "404161567772.dkr.ecr.us-east-1.amazonaws.com/privacera/user-service:v1.2.0"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - name: http
+          containerPort: 5959
+          protocol: TCP
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:

@@ -479,22 +479,50 @@ externalService:
 # Ingress Configuration
 ingress:
   enabled: false # Enable ingress creation
-
+  className: "" # Ingress class name (e.g., nginx, alb, gce, azure-application-gateway)
+  
   # Primary ingress configuration
   hostname: "chart-example.local" # Primary hostname for ingress
   path: "/" # Primary path for routing
   pathType: "Prefix" # Path type (Prefix, Exact, ImplementationSpecific)
 
-  # AWS ALB specific configuration
-  internal: false # Set to true for internal ALB scheme
-  certificate:
-    arn: "" # AWS certificate ARN for HTTPS
-  group:
-    enabled: false # Enable ALB group sharing
-    name: "" # ALB group name
+  # TLS Configuration (cloud-agnostic)
+  tls: [] # TLS configuration list
+  # Example:
+  # tls:
+  #   - secretName: chart-example-tls
+  #     hosts:
+  #       - chart-example.local
+
+  # Cloud-specific ingress configurations (conditional - only populate if needed)
+  aws: {}
+  # Example:
+  # aws:
+  #   annotations:
+  #     alb.ingress.kubernetes.io/scheme: internet-facing
+  #     alb.ingress.kubernetes.io/target-type: ip
+  #     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
+  
+  azure: {}
+  # Example:
+  # azure:
+  #   annotations:
+  #     appgw.ingress.kubernetes.io/ssl-redirect: "true"
+  
+  gcp: {}
+  # Example:
+  # gcp:
+  #   annotations:
+  #     kubernetes.io/ingress.global-static-ip-name: my-static-ip
+
+  # Generic annotations (used when no cloud-specific annotations)
+  annotations: {}
+  # Example:
+  # annotations:
+  #   nginx.ingress.kubernetes.io/rewrite-target: /
+  #   cert-manager.io/cluster-issuer: letsencrypt-prod
 
   # Additional configuration
-  extraAnnotations: {} # Extra ingress annotations beyond default ALB annotations
   extraPaths: [] # Additional paths for the primary host
   extraRules: [] # Additional ingress rules for different hosts
 
@@ -553,16 +581,29 @@ serviceAccount:
   enabled: false # Enable service account creation
   create: true # Create service account if it doesn't exist
   name: "" # Service account name (generated if empty)
-  annotations: {} # Service account annotations
-
-# Examples:
-# serviceAccount:
-#   enabled: true
-#   create: true
-#   name: "user-service-sa"               # Custom service account name
-#   annotations:
-#     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/UserServiceRole"  # AWS IRSA
-#     iam.gke.io/gcp-service-account: "user-service@project.iam.gserviceaccount.com"  # GCP Workload Identity
+  
+  # Cloud-specific service account configurations (conditional - only populate if needed)
+  aws: {}
+  # Example:
+  # aws:
+  #   annotations:
+  #     eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/MyRole"
+  
+  azure: {}
+  # Example:
+  # azure:
+  #   annotations:
+  #     azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+  #     azure.workload.identity/tenant-id: "11111111-1111-1111-1111-111111111111"
+  
+  gcp: {}
+  # Example:
+  # gcp:
+  #   annotations:
+  #     iam.gke.io/gcp-service-account: "my-sa@project.iam.gserviceaccount.com"
+  
+  # Generic annotations (used when no cloud-specific annotations)
+  annotations: {}
 
 # Network Security
 networkPolicy:

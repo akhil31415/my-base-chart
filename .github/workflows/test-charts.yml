@@ -1,0 +1,380 @@
+name: Test Helm Charts
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/test-charts.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'charts/**'
+      - '.github/workflows/test-charts.yml'
+  workflow_dispatch:
+
+jobs:
+  test-cloud-configurations:
+    name: Test ${{ matrix.cloud.name }} Configuration
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        cloud:
+          - name: aws
+            file: test-aws-eks.yaml
+          - name: azure
+            file: test-azure-aks.yaml
+          - name: gcp
+            file: test-gcp-gke.yaml
+          - name: generic
+            file: test-generic-nginx.yaml
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.14.4
+    
+    - name: Lint chart with ${{ matrix.cloud.name }} configuration
+      run: |
+        echo "🔍 Linting chart with ${{ matrix.cloud.name }} configuration..."
+        helm lint ./charts/privacera-base-chart \
+          -f ./charts/privacera-base-chart/examples/${{ matrix.cloud.file }}
+    
+    - name: Template chart with ${{ matrix.cloud.name }} configuration
+      run: |
+        echo "📦 Testing template rendering for ${{ matrix.cloud.name }}..."
+        helm template test-${{ matrix.cloud.name }} ./charts/privacera-base-chart \
+          -f ./charts/privacera-base-chart/examples/${{ matrix.cloud.file }} \
+          > /tmp/test-${{ matrix.cloud.name }}.yaml
+        
+        echo "✅ Template rendered successfully"
+        echo "📊 Generated YAML size: $(wc -l < /tmp/test-${{ matrix.cloud.name }}.yaml) lines"
+        echo ""
+        echo "📄 Output preview (first 50 lines):"
+        head -50 /tmp/test-${{ matrix.cloud.name }}.yaml
+    
+    - name: Verify ${{ matrix.cloud.name }} Ingress Output
+      run: |
+        echo "🔍 Verifying ${{ matrix.cloud.name }} ingress output..."
+        echo ""
+        
+        # Get full Ingress resource
+        ingress_yaml=$(cat /tmp/test-${{ matrix.cloud.name }}.yaml | awk '/kind: Ingress/,/^---/' || true)
+        
+        echo "📄 Full Ingress Resource:"
+        echo "$ingress_yaml"
+        echo ""
+        
+        # Extract just annotations
+        annotations=$(echo "$ingress_yaml" | grep -A 30 "annotations:" || true)
+        echo "📝 Extracted Annotations:"
+        echo "$annotations"
+        echo ""
+        
+        # Verify cloud-specific annotations exist
+        if [ "${{ matrix.cloud.name }}" = "aws" ]; then
+          if echo "$annotations" | grep -q "alb.ingress.kubernetes.io"; then
+            echo "✅ AWS annotations found"
+          else
+            echo "❌ AWS annotations missing!"
+            echo "Expected: alb.ingress.kubernetes.io/*"
+            exit 1
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "azure" ]; then
+          if echo "$annotations" | grep -q "appgw.ingress.kubernetes.io"; then
+            echo "✅ Azure annotations found"
+          else
+            echo "❌ Azure annotations missing!"
+            echo "Expected: appgw.ingress.kubernetes.io/*"
+            exit 1
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "gcp" ]; then
+          if echo "$annotations" | grep -q "networking.gke.io\|kubernetes.io/ingress.global-static-ip-name"; then
+            echo "✅ GCP annotations found"
+          else
+            echo "❌ GCP annotations missing!"
+            echo "Expected: networking.gke.io/* or kubernetes.io/ingress.global-static-ip-name"
+            exit 1
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "generic" ]; then
+          if echo "$annotations" | grep -q "nginx.ingress.kubernetes.io"; then
+            echo "✅ NGINX annotations found"
+          else
+            echo "❌ NGINX annotations missing!"
+            echo "Expected: nginx.ingress.kubernetes.io/*"
+            exit 1
+          fi
+        fi
+    
+    - name: Verify no cross-cloud annotations (${{ matrix.cloud.name }})
+      run: |
+        echo "🔍 Checking for cross-cloud annotations..."
+        
+        ingress_output=$(helm template test-${{ matrix.cloud.name }} ./charts/privacera-base-chart \
+          -f ./charts/privacera-base-chart/examples/${{ matrix.cloud.file }} 2>/dev/null || true)
+        
+        annotations=$(echo "$ingress_output" | awk '/kind: Ingress/,/^---/' | grep "annotation" || true)
+        
+        echo "📝 Checking annotations for incorrect cloud annotations..."
+        
+        # Check that no other cloud's annotations exist
+        if [ "${{ matrix.cloud.name }}" = "aws" ]; then
+          if echo "$annotations" | grep -q "appgw.ingress.kubernetes.io\|networking.gke.io"; then
+            echo "❌ Cross-cloud annotations found (Azure/GCP in AWS test)"
+            echo "Annotations found:"
+            echo "$annotations" | grep "appgw.ingress.kubernetes.io\|networking.gke.io"
+            exit 1
+          else
+            echo "✅ No cross-cloud annotations"
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "azure" ]; then
+          if echo "$annotations" | grep -q "alb.ingress.kubernetes.io\|networking.gke.io"; then
+            echo "❌ Cross-cloud annotations found (AWS/GCP in Azure test)"
+            echo "Annotations found:"
+            echo "$annotations" | grep "alb.ingress.kubernetes.io\|networking.gke.io"
+            exit 1
+          else
+            echo "✅ No cross-cloud annotations"
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "gcp" ]; then
+          if echo "$annotations" | grep -q "alb.ingress.kubernetes.io\|appgw.ingress.kubernetes.io"; then
+            echo "❌ Cross-cloud annotations found (AWS/Azure in GCP test)"
+            echo "Annotations found:"
+            echo "$annotations" | grep "alb.ingress.kubernetes.io\|appgw.ingress.kubernetes.io"
+            exit 1
+          else
+            echo "✅ No cross-cloud annotations"
+          fi
+        fi
+    
+    - name: Verify Service Account Output (${{ matrix.cloud.name }})
+      run: |
+        echo "🔍 Verifying ${{ matrix.cloud.name }} service account output..."
+        echo ""
+        
+        sa_yaml=$(cat /tmp/test-${{ matrix.cloud.name }}.yaml | awk '/kind: ServiceAccount/,/^---/')
+        echo "📄 Full Service Account Resource:"
+        echo "$sa_yaml"
+        echo ""
+        
+        # Check for expected annotations
+        if [ "${{ matrix.cloud.name }}" = "aws" ]; then
+          if echo "$sa_yaml" | grep -q "eks.amazonaws.com/role-arn"; then
+            echo "✅ AWS service account annotations found"
+          else
+            echo "❌ AWS service account annotations missing!"
+            echo "Expected: eks.amazonaws.com/role-arn"
+            exit 1
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "azure" ]; then
+          if echo "$sa_yaml" | grep -q "azure.workload.identity"; then
+            echo "✅ Azure service account annotations found"
+          else
+            echo "❌ Azure service account annotations missing!"
+            echo "Expected: azure.workload.identity/*"
+            exit 1
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "gcp" ]; then
+          if echo "$sa_yaml" | grep -q "iam.gke.io/gcp-service-account"; then
+            echo "✅ GCP service account annotations found"
+          else
+            echo "❌ GCP service account annotations missing!"
+            echo "Expected: iam.gke.io/gcp-service-account"
+            exit 1
+          fi
+        elif [ "${{ matrix.cloud.name }}" = "generic" ]; then
+          echo "ℹ️ Generic configuration - service account not created (expected)"
+        fi
+
+  test-all-examples:
+    name: Test All Example Files
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.14.4
+    
+    - name: Test each example file
+      run: |
+        echo "🧪 Testing all example files..."
+        echo ""
+        
+        PASSED=0
+        FAILED=0
+        SKIPPED=0
+        
+        for example in ./charts/privacera-base-chart/examples/*.yaml; do
+          # Skip test files and docs
+          if [[ "$example" == *"test-"* ]] || [[ "$example" == *"README.md" ]] || [[ "$example" == *"TESTING.md" ]]; then
+            SKIPPED=$((SKIPPED + 1))
+            continue
+          fi
+          
+          filename=$(basename "$example")
+          echo "📦 Testing: $filename"
+          
+          # Lint check
+          if helm lint ./charts/privacera-base-chart -f "$example" &>/dev/null; then
+            echo "  ✅ Lint passed"
+          else
+            echo "  ❌ Lint failed for $filename"
+            helm lint ./charts/privacera-base-chart -f "$example"
+            FAILED=$((FAILED + 1))
+            continue
+          fi
+          
+          # Template check with output verification
+          if helm template test-app ./charts/privacera-base-chart -f "$example" > /tmp/test-$filename.yaml 2>/dev/null; then
+            # Verify output contains expected resources
+            if grep -q "kind: Deployment\|kind: StatefulSet" /tmp/test-$filename.yaml; then
+              echo "  ✅ Template rendered with expected resources"
+              PASSED=$((PASSED + 1))
+            else
+              echo "  ⚠️  Template rendered but missing expected resources"
+              FAILED=$((FAILED + 1))
+            fi
+          else
+            echo "  ❌ Template failed for $filename"
+            FAILED=$((FAILED + 1))
+          fi
+          
+          echo ""
+        done
+        
+        echo "=============================="
+        echo "Test Summary:"
+        echo "  ✅ Passed: $PASSED"
+        echo "  ❌ Failed: $FAILED"
+        echo "  ⏭️  Skipped: $SKIPPED"
+        echo "=============================="
+        
+        if [ $FAILED -gt 0 ]; then
+          echo "❌ Some tests failed!"
+          exit 1
+        else
+          echo "🎉 All tests passed!"
+        fi
+
+  test-output-comparison:
+    name: Test Output Comparison
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+      with:
+        version: v3.14.4
+    
+    - name: Compare all example outputs with expected
+      run: |
+        echo "🧪 Comparing template outputs with expected results..."
+        echo ""
+        
+        PASSED=0
+        FAILED=0
+        
+        for example in ./charts/privacera-base-chart/examples/*.yaml; do
+          # Skip README and TESTING files
+          if [[ "$example" == *"README.md" ]] || [[ "$example" == *"TESTING.md" ]]; then
+            continue
+          fi
+          
+          filename=$(basename "$example" .yaml)
+          expected_file="./charts/privacera-base-chart/examples/expected-outputs/${filename}-expected.yaml"
+          
+          echo "🔍 Comparing: $filename"
+          
+          # Check if expected file exists
+          if [ ! -f "$expected_file" ]; then
+            echo "  ⚠️  No expected output found for $filename"
+            FAILED=$((FAILED + 1))
+            continue
+          fi
+          
+          # Generate current output
+          current_output="/tmp/${filename}-current.yaml"
+          if helm template test-app ./charts/privacera-base-chart -f "$example" > "$current_output" 2>/dev/null; then
+            echo "  ✅ Template rendered successfully"
+          else
+            echo "  ❌ Template failed for $filename"
+            FAILED=$((FAILED + 1))
+            continue
+          fi
+          
+          # Compare outputs
+          if diff -u "$expected_file" "$current_output" > /tmp/diff-${filename}.txt; then
+            echo "  ✅ Output matches expected"
+            PASSED=$((PASSED + 1))
+            rm -f /tmp/diff-${filename}.txt
+          else
+            echo "  ❌ Output differs from expected"
+            echo "  📄 Diff summary:"
+            echo "    Expected lines: $(wc -l < "$expected_file")"
+            echo "    Current lines:  $(wc -l < "$current_output")"
+            echo "  📄 Full diff:"
+            cat /tmp/diff-${filename}.txt | head -50
+            FAILED=$((FAILED + 1))
+          fi
+          
+          echo ""
+        done
+        
+        echo "=============================="
+        echo "Output Comparison Summary:"
+        echo "  ✅ Passed: $PASSED"
+        echo "  ❌ Failed: $FAILED"
+        echo "=============================="
+        
+        if [ $FAILED -gt 0 ]; then
+          echo "❌ Some outputs differ from expected!"
+          echo ""
+          echo "To update expected outputs, run:"
+          echo "  ./scripts/update-expected-outputs.sh"
+          exit 1
+        else
+          echo "🎉 All outputs match expected!"
+        fi
+
+  summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-cloud-configurations, test-all-examples, test-output-comparison]
+    if: always()
+    
+    steps:
+    - name: Test Results Summary
+      run: |
+        echo "## 🧪 Helm Chart Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ **All tests passed!**" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Some tests failed**" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Coverage" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Cloud configurations (AWS, Azure, GCP, Generic)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Ingress annotation verification" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Service account annotation verification" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Cross-cloud annotation detection" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ All example files validated" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Template output comparison with expected results" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

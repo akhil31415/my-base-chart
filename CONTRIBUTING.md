@@ -38,10 +38,20 @@ Thank you for your interest in contributing to this project! This document provi
 ### Code Contributions
 
 #### 1. Chart Changes
+- **Automated Testing**: All chart changes are automatically tested on PRs via GitHub Actions
 - Test changes locally:
   ```bash
+  # Run all tests
+  ./scripts/test-examples.sh
+  
+  # Or test individual configurations
   helm lint charts/privacera-base-chart
   helm template test charts/privacera-base-chart
+  
+  # Test cloud-specific configurations
+  helm template test charts/privacera-base-chart -f charts/privacera-base-chart/examples/test-aws-eks.yaml
+  helm template test charts/privacera-base-chart -f charts/privacera-base-chart/examples/test-azure-aks.yaml
+  helm template test charts/privacera-base-chart -f charts/privacera-base-chart/examples/test-gcp-gke.yaml
   ```
 
 - Test with different values:
@@ -111,10 +121,32 @@ Thank you for your interest in contributing to this project! This document provi
 - Add comprehensive comments
 
 ### Testing
+
+#### Automated Testing
+- **GitHub Actions**: All PRs automatically test chart changes
+- **Cloud Configurations**: Tests AWS, Azure, GCP, and generic configurations
+- **Example Validation**: Tests all example files in `examples/` directory
+
+#### Manual Testing
+```bash
+# Run all automated tests
+./scripts/test-examples.sh
+
+# Test specific cloud configuration
+helm template test ./charts/privacera-base-chart \
+  -f charts/privacera-base-chart/examples/test-aws-eks.yaml
+
+# Verify annotations are cloud-specific
+helm template test ./charts/privacera-base-chart \
+  -f charts/privacera-base-chart/examples/test-aws-eks.yaml | grep "alb.ingress"
+```
+
+#### Testing Requirements
 - Test with minimal values
 - Test with complex configurations
 - Test both Deployment and StatefulSet modes
 - Verify resource generation
+- **Test cloud-agnostic behavior**: Verify only specified cloud's annotations appear
 
 ### Documentation
 - Update values.yaml comments
@@ -150,10 +182,23 @@ Examples:
 
 Releases are automated via GitHub Actions:
 
-1. **Merge to main**: Changes merged to main trigger the release workflow
-2. **Chart packaging**: Charts are automatically packaged and released
-3. **GitHub Pages**: Repository index is updated on GitHub Pages
-4. **GitHub Releases**: Release notes are automatically generated
+1. **PR Testing**: All PRs automatically test chart changes with multiple cloud configurations
+2. **Merge to main**: Changes merged to main trigger the release workflow
+3. **Chart packaging**: Charts are automatically packaged and released
+4. **GitHub Pages**: Repository index is updated on GitHub Pages
+5. **GitHub Releases**: Release notes are automatically generated
+
+### Testing Workflow
+
+The automated testing workflow (`.github/workflows/test-charts.yml`) runs on every PR and push to main:
+
+- ✅ Tests all cloud configurations (AWS, Azure, GCP, generic)
+- ✅ Validates service account annotations per cloud
+- ✅ Verifies no cross-cloud annotations appear
+- ✅ Lints all example files
+- ✅ Ensures templates render successfully
+
+Failed tests will block PR merges until issues are resolved.
 
 ### Manual Release (if needed)
 ```bash

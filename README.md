@@ -2,6 +2,17 @@
 
 A comprehensive, production-ready base Helm chart for microservices with built-in observability, security, and scalability features.
 
+## ☁️ **Cloud-Agnostic Design**
+
+This chart works seamlessly across **any** Kubernetes environment:
+- ☁️ **AWS EKS** (Amazon Elastic Kubernetes Service)
+- ☁️ **Azure AKS** (Azure Kubernetes Service)  
+- ☁️ **GCP GKE** (Google Kubernetes Engine)
+- 🏢 On-premises Kubernetes clusters
+- 📦 Any other Kubernetes distribution
+
+Following industry best practices (as used by Grafana, Prometheus, and other CNCF projects), the chart uses configurable parameters with no hardcoded cloud-specific values.
+
 ## 🚀 Quick Start
 
 ### Add the Helm Repository

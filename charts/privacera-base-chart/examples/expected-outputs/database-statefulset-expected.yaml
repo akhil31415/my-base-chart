@@ -1,0 +1,489 @@
+---
+# Source: privacera-base-chart/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-database-netpol
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+spec:
+  podSelector:
+    matchLabels:
+      app: app-name
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: application-backend
+    - namespaceSelector:
+        matchLabels:
+          name: applications
+    ports:
+    - port: 5432
+      protocol: TCP
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgres-database
+    ports:
+    - port: 5432
+      protocol: TCP
+  egress:
+  - ports:
+    - port: 53
+      protocol: TCP
+    - port: 53
+      protocol: UDP
+    to: []
+  - ports:
+    - port: 5432
+      protocol: TCP
+    to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgres-database
+---
+# Source: privacera-base-chart/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-database-pdb
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: app-name
+---
+# Source: privacera-base-chart/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-database-sa
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/postgres-service-role
+---
+# Source: privacera-base-chart/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-database-secret
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+data:
+  POSTGRES_PASSWORD: c3VwZXJzZWNyZXRwYXNzd29yZA==
+  POSTGRES_REPLICATION_PASSWORD: cmVwbGljYXRpb25wYXNzd29yZA==
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-database
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: http
+  selector:
+    app: app-name
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-database-headless
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: http
+  selector:
+    app: app-name
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-database
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: app-name
+  template:
+    metadata:
+      labels:
+        app: app-name
+    spec:
+      
+      serviceAccountName: postgres-database-sa
+      nodeSelector:
+        node.kubernetes.io/instance-type: r5.xlarge
+        topology.kubernetes.io/zone: us-west-2a
+      tolerations:
+        - effect: NoSchedule
+          key: database
+          operator: Equal
+          value: postgres
+      terminationGracePeriodSeconds: 120
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: app-name
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: app-name
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - r5.xlarge
+                - r5.2xlarge
+            weight: 100
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: postgres-database
+            topologyKey: kubernetes.io/hostname
+      securityContext:
+        enabled: true
+        fsGroup: 999
+        runAsGroup: 999
+        runAsNonRoot: false
+        runAsUser: 999
+      initContainers:
+      - name: init-db
+        image: postgres:15.2
+        imagePullPolicy: IfNotPresent
+        command:
+          - /bin/bash
+          - -c
+          - |
+            set -e
+            echo "Initializing database directories..."
+          
+            # Create data directory if it doesn't exist
+            if [ ! -d "/data/postgres-data/pgdata" ]; then
+              echo "Creating PostgreSQL data directory structure..."
+              mkdir -p /data/postgres-data/pgdata
+              mkdir -p /data/postgres-wal
+              chown -R 999:999 /data/postgres-data
+              chown -R 999:999 /data/postgres-wal
+            fi
+          
+            echo "Database initialization completed."
+        volumeMounts:
+          - mountPath: /data/postgres-data
+            name: postgres-data
+          - mountPath: /data/postgres-wal
+            name: postgres-wal
+        securityContext:
+          capabilities:
+            add:
+            - CHOWN
+            - FOWNER
+          runAsGroup: 0
+          runAsUser: 0
+      containers:
+      - name: app-name
+        image: "postgres/postgres:15.2"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 999
+          runAsNonRoot: false
+          runAsUser: 999
+        ports:
+        - name: http
+          containerPort: 5432
+          protocol: TCP
+        envFrom:
+          - secretRef:
+              name: postgres-database
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:
+---
+# Source: privacera-base-chart/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-database
+  namespace: privacera
+  labels:
+    app: app-name
+    app.kubernetes.io/name: app-name
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: app-name
+    app.kubernetes.io/part-of: app-name
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/part-of: data-platform
+    app.kubernetes.io/tier: database
+  annotations:
+    app.kubernetes.io/component: database
+spec:
+  replicas: 3
+  serviceName: postgres-database-headless
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app: app-name
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    metadata:
+      annotations:
+        # This annotation ensures pods are restarted when ConfigMap content changes
+        checksum/configmap: 545c38b0922de19734fbffde62792c37c2aef6a3216cfa472449173165220f7d
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9187"
+        prometheus.io/scrape: "true"
+      labels:
+        app: app-name
+        app.kubernetes.io/component: database
+        app.kubernetes.io/part-of: data-platform
+    spec:
+      serviceAccountName: postgres-database-sa
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsGroup: 999
+      terminationGracePeriodSeconds: 120
+      initContainers:
+        - name: init-db
+          image: postgres:15.2
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "Initializing database directories..."
+            
+              # Create data directory if it doesn't exist
+              if [ ! -d "/data/postgres-data/pgdata" ]; then
+                echo "Creating PostgreSQL data directory structure..."
+                mkdir -p /data/postgres-data/pgdata
+                mkdir -p /data/postgres-wal
+                chown -R 999:999 /data/postgres-data
+                chown -R 999:999 /data/postgres-wal
+              fi
+            
+              echo "Database initialization completed."
+          volumeMounts:
+            - mountPath: /data/postgres-data
+              name: postgres-data
+            - mountPath: /data/postgres-wal
+              name: postgres-wal
+          securityContext:
+            capabilities:
+              add:
+              - CHOWN
+              - FOWNER
+            runAsGroup: 0
+            runAsUser: 0
+      containers:
+        - name: privacera-base-chart
+          image: "postgres/postgres:15.2"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: postgres-database-env
+            - secretRef:
+                name: postgres-database
+          resources:
+            limits:
+              cpu: ""
+              memory: 2Gi
+            requests:
+              cpu: 100m
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: false
+            runAsGroup: 999
+            runAsNonRoot: false
+            runAsUser: 999
+          volumeMounts:
+            
+            
+            - name: secrets
+              mountPath: /etc/secrets
+              readOnly: true
+            - name: postgres-data
+              mountPath: /data/postgres-data
+            - name: postgres-wal
+              mountPath: /data/postgres-wal
+      nodeSelector:
+        node.kubernetes.io/instance-type: r5.xlarge
+        topology.kubernetes.io/zone: us-west-2a
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - preference:
+              matchExpressions:
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                - r5.xlarge
+                - r5.2xlarge
+            weight: 100
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: postgres-database
+            topologyKey: kubernetes.io/hostname
+      tolerations:
+        - effect: NoSchedule
+          key: database
+          operator: Equal
+          value: postgres
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: app-name
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: app-name
+      volumes:
+        
+        
+        - name: secrets
+          secret:
+            secretName: postgres-database
+  volumeClaimTemplates:
+    - metadata:
+        annotations:
+          volume.beta.kubernetes.io/storage-class: gp2
+        name: postgres-data
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Gi
+        storageClassName: gp2
+    - metadata:
+        annotations:
+          volume.beta.kubernetes.io/storage-class: gp2
+        name: postgres-wal
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: gp2

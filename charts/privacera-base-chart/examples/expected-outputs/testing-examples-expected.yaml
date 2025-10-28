@@ -1,0 +1,289 @@
+---
+# Source: privacera-base-chart/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: test-service-netpol
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+spec:
+  podSelector:
+    matchLabels:
+      app: test-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: privacera-test
+    ports:
+    - port: 8080
+      protocol: TCP
+  egress:
+  - ports:
+    - port: 53
+      protocol: TCP
+    - port: 53
+      protocol: UDP
+    to: []
+---
+# Source: privacera-base-chart/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: test-service-pdb
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: test-service
+---
+# Source: privacera-base-chart/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-service-sa
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+  annotations:
+    test.serviceaccount/annotation: test-value
+---
+# Source: privacera-base-chart/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: test-service-secret
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+type: Opaque
+data:
+  TEST_SECRET: dGVzdC1zZWNyZXQtdmFsdWU=
+---
+# Source: privacera-base-chart/templates/service-external.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+  name: test-service-ext
+  namespace: privacera-test
+spec:
+  type: ClusterIP
+  ports:
+  - name: "external"
+    port: 9090
+    targetPort: 9090
+  selector:
+    app: test-service
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-service
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+  annotations:
+    test.service/annotation: "test-value"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: test-service
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-service
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: test-service
+  template:
+    metadata:
+      labels:
+        app: test-service
+        environment: testing
+        service-type: test
+        team: platform
+      annotations:
+        test.kubernetes.io/managed-by: helm-chart-test
+    spec:
+      
+      imagePullSecrets:
+        - name: map[name:test-registry-secret]
+      serviceAccountName: test-service-sa
+      tolerations:
+        []
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: test-service
+      securityContext:
+        enabled: true
+        fsGroup: 200
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: test-service
+        image: "404161567772.dkr.ecr.us-east-1.amazonaws.com/privacera/test-service:test-latest"
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - name: http
+          containerPort: 5959
+          protocol: TCP
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:
+---
+# Source: privacera-base-chart/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: test-service
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: test-service
+  minReplicas: 1
+  maxReplicas: 100
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+# Source: privacera-base-chart/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-service-ingress
+  namespace: privacera-test
+  labels:
+    app: test-service
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-service
+    app.kubernetes.io/part-of: test-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 0.1.0-test
+spec:
+  rules:
+  - host: test.example.com
+    http:
+      paths:
+      - path: /test
+        pathType: Prefix
+        backend:
+          service:
+            name: test-service
+            port:
+              number: 8080

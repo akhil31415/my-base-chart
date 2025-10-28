@@ -2,12 +2,23 @@
 
 This directory contains comprehensive examples demonstrating various deployment patterns and configurations for the Privacera Helm Chart. Each example showcases different use cases and chart capabilities.
 
+## ☁️ **Cloud-Agnostic Design**
+
+This Helm chart is **fully cloud-agnostic** and works on **any** Kubernetes cluster:
+- ☁️ **AWS EKS** (Amazon Elastic Kubernetes Service)
+- ☁️ **Azure AKS** (Azure Kubernetes Service)
+- ☁️ **GCP GKE** (Google Kubernetes Engine)
+- 🏢 On-premises Kubernetes clusters
+- 📦 Any other Kubernetes distribution
+
+The chart uses conditional cloud-specific configurations. See values.yaml `ingress.aws`, `ingress.azure`, `ingress.gcp` blocks.
+
 ## 🚀 **Available Examples**
 
 | Example | Workload Type | Description | Use Case |
 |---------|---------------|-------------|----------|
 | `basic-microservice.yaml` | **Deployment** | Simple 2-replica setup with health checks | Development/Testing |
-| `production-microservice.yaml` | **Deployment** | Full production setup with ALB, HPA, advanced security | Production Web Services |
+| `production-microservice.yaml` | **Deployment** | Full production setup with HPA, advanced security | Production Web Services |
 | `advanced-microservice.yaml` | **Deployment** | Complex setup with init containers, sidecars, KEDA scaling | Advanced Microservices |
 | `multi-container-microservice.yaml` | **Deployment** | Service mesh pattern with nginx proxy and sidecars | Multi-container Applications |
 | `database-statefulset.yaml` | **StatefulSet** | PostgreSQL database with persistent storage | Stateful Applications |

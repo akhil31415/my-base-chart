@@ -1,6 +1,19 @@
 {{- $globalIngress := include "globalIngress" . | fromYaml }}
 {{- $globalApp := include "globalApp" . | fromYaml }}
 {{- if $globalIngress.enabled }}
+{{- $annotations := dict }}
+{{- if .Values.ingress.aws.annotations }}
+  {{- $annotations = merge $annotations .Values.ingress.aws.annotations }}
+{{- end }}
+{{- if .Values.ingress.azure.annotations }}
+  {{- $annotations = merge $annotations .Values.ingress.azure.annotations }}
+{{- end }}
+{{- if .Values.ingress.gcp.annotations }}
+  {{- $annotations = merge $annotations .Values.ingress.gcp.annotations }}
+{{- end }}
+{{- if .Values.ingress.annotations }}
+  {{- $annotations = merge $annotations .Values.ingress.annotations }}
+{{- end }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -8,24 +21,18 @@ metadata:
   namespace: {{ $globalApp.namespace }}
   labels:
     {{- include "commonLabels" . | nindent 4 }}
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  {{- if $annotations }}
   annotations:
-    kubernetes.io/ingress.class: alb
-    alb.ingress.kubernetes.io/target-type: ip
-    {{- if .Values.ingress.internal }}
-    alb.ingress.kubernetes.io/scheme: internal
-    {{- else }}
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    {{- end }}
-    {{- if and .Values.ingress.certificate .Values.ingress.certificate.arn }}
-    alb.ingress.kubernetes.io/certificate-arn: {{ tpl .Values.ingress.certificate.arn . }}
-    {{- end }}
-    {{- if and .Values.ingress.group .Values.ingress.group.enabled }}
-    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.group.name }}
-    {{- end }}
-    {{- with .Values.ingress.extraAnnotations }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
+    {{- toYaml $annotations | nindent 4 }}
+  {{- end }}
 spec:
+  {{- if .Values.ingress.tls }}
+  tls:
+  {{- toYaml .Values.ingress.tls | nindent 2 }}
+  {{- end }}
   rules:
   - host: {{ tpl .Values.ingress.hostname . }}
     http:
@@ -42,7 +49,7 @@ spec:
         pathType: {{ .pathType | default "Prefix" }}
         backend:
           service:
-            name: {{ include "fullname" $ }}-ext
+            name: {{ .serviceName | default (include "fullname" $) }}
             port:
               number: {{ .port }}
       {{- end }}
@@ -55,7 +62,7 @@ spec:
         pathType: {{ .pathType | default "Prefix" }}
         backend:
           service:
-            name: {{ .serviceName }}
+            name: {{ .serviceName | default (include "fullname" $) }}
             port:
               number: {{ .port }}
       {{- end }}

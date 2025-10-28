@@ -1,0 +1,233 @@
+---
+# Source: privacera-base-chart/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-service-netpol
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+spec:
+  podSelector:
+    matchLabels:
+      app: payment-service
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: privacera
+    ports:
+    - port: 80
+      protocol: TCP
+  egress:
+  - ports:
+    - port: 53
+      protocol: TCP
+    - port: 53
+      protocol: UDP
+    to: []
+---
+# Source: privacera-base-chart/templates/pdb.yaml
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: payment-service-pdb
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: payment-service
+---
+# Source: privacera-base-chart/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: payment-service-sa
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+---
+# Source: privacera-base-chart/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: payment-service-secret
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+type: Opaque
+data:
+  PAYMENT_API_KEY: cGF5bWVudC1hcGkta2V5
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: payment-service
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+        architecture: multi-container
+        service-type: api
+        team: commerce
+    spec:
+      
+      imagePullSecrets:
+        - name: map[name:privacera-registry-secret]
+      serviceAccountName: payment-service-sa
+      tolerations:
+        []
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: payment-service
+      securityContext:
+        enabled: true
+        fsGroup: 200
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: payment-service
+        image: "404161567772.dkr.ecr.us-east-1.amazonaws.com/privacera/payment-service:v1.3.0-staging"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - name: http
+          containerPort: 5959
+          protocol: TCP
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:
+---
+# Source: privacera-base-chart/templates/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: payment-service
+  namespace: privacera
+  labels:
+    app: payment-service
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: payment-service
+    app.kubernetes.io/part-of: payment-service
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/version: 1.3.0
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payment-service
+  minReplicas: 1
+  maxReplicas: 100
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 80
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
