@@ -1,0 +1,61 @@
+# Minimal Azure AKS test configuration
+app:
+  name: test-azure
+  env: test
+
+image:
+  repository: nginx
+  tag: "1.23"
+
+deployment:
+  enabled: true
+  replicaCount: 1
+
+mainContainer:
+  containerPort: 80
+
+service:
+  enabled: true
+  port: 80
+
+# Azure AKS specific configuration
+ingress:
+  enabled: true
+  className: azure-application-gateway
+  hostname: "test.example.com"
+  path: "/"
+  pathType: Prefix
+  
+  # Only Azure annotations
+  azure:
+    annotations:
+      appgw.ingress.kubernetes.io/ssl-redirect: "true"
+      appgw.ingress.kubernetes.io/backend-protocol: "http"
+      appgw.ingress.kubernetes.io/cookie-based-affinity: "true"
+  
+  # Empty for other clouds
+  aws: {}
+  gcp: {}
+  annotations: {}
+
+# Service Account with Azure Workload Identity
+serviceAccount:
+  create: true
+  name: "test-azure-sa"
+  
+  # Only Azure annotations
+  azure:
+    annotations:
+      azure.workload.identity/client-id: "00000000-0000-0000-0000-000000000000"
+      azure.workload.identity/tenant-id: "11111111-1111-1111-1111-111111111111"
+  
+  # Empty for other clouds
+  aws: {}
+  gcp: {}
+  annotations: {}
+
+podDisruptionBudget:
+  enabled: false
+
+autoscaling:
+  enabled: false

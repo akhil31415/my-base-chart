@@ -1,0 +1,56 @@
+# Minimal Generic NGINX test configuration
+app:
+  name: test-generic
+  env: test
+
+image:
+  repository: nginx
+  tag: "1.23"
+
+deployment:
+  enabled: true
+  replicaCount: 1
+
+mainContainer:
+  containerPort: 80
+
+service:
+  enabled: true
+  port: 80
+
+# Generic NGINX specific configuration
+ingress:
+  enabled: true
+  className: nginx
+  hostname: "test.example.com"
+  path: "/"
+  pathType: Prefix
+  
+  # No cloud-specific configurations
+  aws: {}
+  azure: {}
+  gcp: {}
+  
+  # Use generic annotations for NGINX
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: nginx
+
+# Service Account (Generic - not created)
+serviceAccount:
+  create: false
+  name: "default"
+  
+  # No cloud-specific configurations
+  aws: {}
+  azure: {}
+  gcp: {}
+  annotations: {}
+
+podDisruptionBudget:
+  enabled: false
+
+autoscaling:
+  enabled: false

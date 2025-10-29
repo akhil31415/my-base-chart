@@ -1,0 +1,149 @@
+---
+# Source: privacera-base-chart/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-aws-sa
+  namespace: privacera
+  labels:
+    app: test-aws
+    app.kubernetes.io/name: test-aws
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-aws
+    app.kubernetes.io/part-of: test-aws
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/TestRole
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-aws
+  namespace: privacera
+  labels:
+    app: test-aws
+    app.kubernetes.io/name: test-aws
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-aws
+    app.kubernetes.io/part-of: test-aws
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 5959
+      protocol: TCP
+      name: http
+  selector:
+    app: test-aws
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-aws
+  namespace: privacera
+  labels:
+    app: test-aws
+    app.kubernetes.io/name: test-aws
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-aws
+    app.kubernetes.io/part-of: test-aws
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: test-aws
+  template:
+    metadata:
+      labels:
+        app: test-aws
+    spec:
+      
+      serviceAccountName: test-aws-sa
+      tolerations:
+        []
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: test-aws
+      securityContext:
+        enabled: true
+        fsGroup: 200
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: test-aws
+        image: "docker.io/nginx:1.23"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:
+---
+# Source: privacera-base-chart/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-aws-ingress
+  namespace: privacera
+  labels:
+    app: test-aws
+    app.kubernetes.io/name: test-aws
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-aws
+    app.kubernetes.io/part-of: test-aws
+    app.kubernetes.io/managed-by: Helm
+  ingressClassName: alb
+  annotations:
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:123456789012:certificate/test
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+spec:
+  rules:
+  - host: test.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: test-aws
+            port:
+              number: 80

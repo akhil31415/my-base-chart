@@ -16,183 +16,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  test-cloud-configurations:
-    name: Test ${{ matrix.cloud.name }} Configuration
-    runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        cloud:
-          - name: aws
-            file: test-aws-eks.yaml
-          - name: azure
-            file: test-azure-aks.yaml
-          - name: gcp
-            file: test-gcp-gke.yaml
-          - name: generic
-            file: test-generic-nginx.yaml
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
-    - name: Install Helm
-      uses: azure/setup-helm@v4
-      with:
-        version: v3.14.4
-    
-    - name: Lint chart with ${{ matrix.cloud.name }} configuration
-      run: |
-        echo "🔍 Linting chart with ${{ matrix.cloud.name }} configuration..."
-        helm lint ./charts/privacera-base-chart \
-          -f ./charts/privacera-base-chart/examples/${{ matrix.cloud.file }}
-    
-    - name: Template chart with ${{ matrix.cloud.name }} configuration
-      run: |
-        echo "📦 Testing template rendering for ${{ matrix.cloud.name }}..."
-        helm template test-${{ matrix.cloud.name }} ./charts/privacera-base-chart \
-          -f ./charts/privacera-base-chart/examples/${{ matrix.cloud.file }} \
-          > /tmp/test-${{ matrix.cloud.name }}.yaml
-        
-        echo "✅ Template rendered successfully"
-        echo "📊 Generated YAML size: $(wc -l < /tmp/test-${{ matrix.cloud.name }}.yaml) lines"
-        echo ""
-        echo "📄 Output preview (first 50 lines):"
-        head -50 /tmp/test-${{ matrix.cloud.name }}.yaml
-    
-    - name: Verify ${{ matrix.cloud.name }} Ingress Output
-      run: |
-        echo "🔍 Verifying ${{ matrix.cloud.name }} ingress output..."
-        echo ""
-        
-        # Get full Ingress resource
-        ingress_yaml=$(cat /tmp/test-${{ matrix.cloud.name }}.yaml | awk '/kind: Ingress/,/^---/' || true)
-        
-        echo "📄 Full Ingress Resource:"
-        echo "$ingress_yaml"
-        echo ""
-        
-        # Extract just annotations
-        annotations=$(echo "$ingress_yaml" | grep -A 30 "annotations:" || true)
-        echo "📝 Extracted Annotations:"
-        echo "$annotations"
-        echo ""
-        
-        # Verify cloud-specific annotations exist
-        if [ "${{ matrix.cloud.name }}" = "aws" ]; then
-          if echo "$annotations" | grep -q "alb.ingress.kubernetes.io"; then
-            echo "✅ AWS annotations found"
-          else
-            echo "❌ AWS annotations missing!"
-            echo "Expected: alb.ingress.kubernetes.io/*"
-            exit 1
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "azure" ]; then
-          if echo "$annotations" | grep -q "appgw.ingress.kubernetes.io"; then
-            echo "✅ Azure annotations found"
-          else
-            echo "❌ Azure annotations missing!"
-            echo "Expected: appgw.ingress.kubernetes.io/*"
-            exit 1
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "gcp" ]; then
-          if echo "$annotations" | grep -q "networking.gke.io\|kubernetes.io/ingress.global-static-ip-name"; then
-            echo "✅ GCP annotations found"
-          else
-            echo "❌ GCP annotations missing!"
-            echo "Expected: networking.gke.io/* or kubernetes.io/ingress.global-static-ip-name"
-            exit 1
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "generic" ]; then
-          if echo "$annotations" | grep -q "nginx.ingress.kubernetes.io"; then
-            echo "✅ NGINX annotations found"
-          else
-            echo "❌ NGINX annotations missing!"
-            echo "Expected: nginx.ingress.kubernetes.io/*"
-            exit 1
-          fi
-        fi
-    
-    - name: Verify no cross-cloud annotations (${{ matrix.cloud.name }})
-      run: |
-        echo "🔍 Checking for cross-cloud annotations..."
-        
-        ingress_output=$(helm template test-${{ matrix.cloud.name }} ./charts/privacera-base-chart \
-          -f ./charts/privacera-base-chart/examples/${{ matrix.cloud.file }} 2>/dev/null || true)
-        
-        annotations=$(echo "$ingress_output" | awk '/kind: Ingress/,/^---/' | grep "annotation" || true)
-        
-        echo "📝 Checking annotations for incorrect cloud annotations..."
-        
-        # Check that no other cloud's annotations exist
-        if [ "${{ matrix.cloud.name }}" = "aws" ]; then
-          if echo "$annotations" | grep -q "appgw.ingress.kubernetes.io\|networking.gke.io"; then
-            echo "❌ Cross-cloud annotations found (Azure/GCP in AWS test)"
-            echo "Annotations found:"
-            echo "$annotations" | grep "appgw.ingress.kubernetes.io\|networking.gke.io"
-            exit 1
-          else
-            echo "✅ No cross-cloud annotations"
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "azure" ]; then
-          if echo "$annotations" | grep -q "alb.ingress.kubernetes.io\|networking.gke.io"; then
-            echo "❌ Cross-cloud annotations found (AWS/GCP in Azure test)"
-            echo "Annotations found:"
-            echo "$annotations" | grep "alb.ingress.kubernetes.io\|networking.gke.io"
-            exit 1
-          else
-            echo "✅ No cross-cloud annotations"
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "gcp" ]; then
-          if echo "$annotations" | grep -q "alb.ingress.kubernetes.io\|appgw.ingress.kubernetes.io"; then
-            echo "❌ Cross-cloud annotations found (AWS/Azure in GCP test)"
-            echo "Annotations found:"
-            echo "$annotations" | grep "alb.ingress.kubernetes.io\|appgw.ingress.kubernetes.io"
-            exit 1
-          else
-            echo "✅ No cross-cloud annotations"
-          fi
-        fi
-    
-    - name: Verify Service Account Output (${{ matrix.cloud.name }})
-      run: |
-        echo "🔍 Verifying ${{ matrix.cloud.name }} service account output..."
-        echo ""
-        
-        sa_yaml=$(cat /tmp/test-${{ matrix.cloud.name }}.yaml | awk '/kind: ServiceAccount/,/^---/')
-        echo "📄 Full Service Account Resource:"
-        echo "$sa_yaml"
-        echo ""
-        
-        # Check for expected annotations
-        if [ "${{ matrix.cloud.name }}" = "aws" ]; then
-          if echo "$sa_yaml" | grep -q "eks.amazonaws.com/role-arn"; then
-            echo "✅ AWS service account annotations found"
-          else
-            echo "❌ AWS service account annotations missing!"
-            echo "Expected: eks.amazonaws.com/role-arn"
-            exit 1
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "azure" ]; then
-          if echo "$sa_yaml" | grep -q "azure.workload.identity"; then
-            echo "✅ Azure service account annotations found"
-          else
-            echo "❌ Azure service account annotations missing!"
-            echo "Expected: azure.workload.identity/*"
-            exit 1
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "gcp" ]; then
-          if echo "$sa_yaml" | grep -q "iam.gke.io/gcp-service-account"; then
-            echo "✅ GCP service account annotations found"
-          else
-            echo "❌ GCP service account annotations missing!"
-            echo "Expected: iam.gke.io/gcp-service-account"
-            exit 1
-          fi
-        elif [ "${{ matrix.cloud.name }}" = "generic" ]; then
-          echo "ℹ️ Generic configuration - service account not created (expected)"
-        fi
-
   test-all-examples:
     name: Test All Example Files
     runs-on: ubuntu-latest
@@ -216,8 +39,8 @@ jobs:
         SKIPPED=0
         
         for example in ./charts/privacera-base-chart/examples/*.yaml; do
-          # Skip test files and docs
-          if [[ "$example" == *"test-"* ]] || [[ "$example" == *"README.md" ]] || [[ "$example" == *"TESTING.md" ]]; then
+          # Skip docs only
+          if [[ "$example" == *"README.md" ]] || [[ "$example" == *"TESTING.md" ]]; then
             SKIPPED=$((SKIPPED + 1))
             continue
           fi
@@ -287,10 +110,12 @@ jobs:
         
         PASSED=0
         FAILED=0
+        SKIPPED=0
         
         for example in ./charts/privacera-base-chart/examples/*.yaml; do
-          # Skip README and TESTING files
+          # Skip docs only
           if [[ "$example" == *"README.md" ]] || [[ "$example" == *"TESTING.md" ]]; then
+            SKIPPED=$((SKIPPED + 1))
             continue
           fi
           
@@ -338,6 +163,7 @@ jobs:
         echo "Output Comparison Summary:"
         echo "  ✅ Passed: $PASSED"
         echo "  ❌ Failed: $FAILED"
+        echo "  ⏭️  Skipped: $SKIPPED"
         echo "=============================="
         
         if [ $FAILED -gt 0 ]; then
@@ -353,7 +179,7 @@ jobs:
   summary:
     name: Test Summary
     runs-on: ubuntu-latest
-    needs: [test-cloud-configurations, test-all-examples, test-output-comparison]
+    needs: [test-all-examples, test-output-comparison]
     if: always()
     
     steps:
@@ -370,11 +196,7 @@ jobs:
         
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Test Coverage" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Cloud configurations (AWS, Azure, GCP, Generic)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Ingress annotation verification" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Service account annotation verification" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Cross-cloud annotation detection" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ All example files validated" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ All example files validated (lint + template)" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Template output comparison with expected results" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "**Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

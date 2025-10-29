@@ -1,0 +1,60 @@
+# Minimal GCP GKE test configuration
+app:
+  name: test-gcp
+  env: test
+
+image:
+  repository: nginx
+  tag: "1.23"
+
+deployment:
+  enabled: true
+  replicaCount: 1
+
+mainContainer:
+  containerPort: 80
+
+service:
+  enabled: true
+  port: 80
+
+# GCP GKE specific configuration
+ingress:
+  enabled: true
+  className: gce
+  hostname: "test.example.com"
+  path: "/"
+  pathType: Prefix
+  
+  # Only GCP annotations
+  gcp:
+    annotations:
+      kubernetes.io/ingress.global-static-ip-name: "test-example-com-ip"
+      networking.gke.io/managed-certificates: "test-example-com-cert"
+      kubernetes.io/ingress.class: "gce"
+  
+  # Empty for other clouds
+  aws: {}
+  azure: {}
+  annotations: {}
+
+# Service Account with GKE Workload Identity
+serviceAccount:
+  create: true
+  name: "test-gcp-sa"
+  
+  # Only GCP annotations
+  gcp:
+    annotations:
+      iam.gke.io/gcp-service-account: "test-gcp@my-project.iam.gserviceaccount.com"
+  
+  # Empty for other clouds
+  aws: {}
+  azure: {}
+  annotations: {}
+
+podDisruptionBudget:
+  enabled: false
+
+autoscaling:
+  enabled: false

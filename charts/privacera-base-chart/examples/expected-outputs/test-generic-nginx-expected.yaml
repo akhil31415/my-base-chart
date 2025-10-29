@@ -1,0 +1,134 @@
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-generic
+  namespace: privacera
+  labels:
+    app: test-generic
+    app.kubernetes.io/name: test-generic
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-generic
+    app.kubernetes.io/part-of: test-generic
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 5959
+      protocol: TCP
+      name: http
+  selector:
+    app: test-generic
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-generic
+  namespace: privacera
+  labels:
+    app: test-generic
+    app.kubernetes.io/name: test-generic
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-generic
+    app.kubernetes.io/part-of: test-generic
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: test-generic
+  template:
+    metadata:
+      labels:
+        app: test-generic
+    spec:
+      
+      serviceAccountName: default
+      tolerations:
+        []
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: test-generic
+      securityContext:
+        enabled: true
+        fsGroup: 200
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: test-generic
+        image: "docker.io/nginx:1.23"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:
+---
+# Source: privacera-base-chart/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-generic-ingress
+  namespace: privacera
+  labels:
+    app: test-generic
+    app.kubernetes.io/name: test-generic
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-generic
+    app.kubernetes.io/part-of: test-generic
+    app.kubernetes.io/managed-by: Helm
+  ingressClassName: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+  - host: test.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: test-generic
+            port:
+              number: 80

@@ -1,0 +1,60 @@
+# Minimal AWS EKS test configuration
+app:
+  name: test-aws
+  env: test
+
+image:
+  repository: nginx
+  tag: "1.23"
+
+deployment:
+  enabled: true
+  replicaCount: 1
+
+mainContainer:
+  containerPort: 80
+
+service:
+  enabled: true
+  port: 80
+
+# AWS EKS specific configuration
+ingress:
+  enabled: true
+  className: alb
+  hostname: "test.example.com"
+  path: "/"
+  pathType: Prefix
+  
+  # Only AWS annotations
+  aws:
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/certificate-arn: "arn:aws:acm:us-east-1:123456789012:certificate/test"
+  
+  # Empty for other clouds
+  azure: {}
+  gcp: {}
+  annotations: {}
+
+# Service Account with AWS IRSA
+serviceAccount:
+  create: true
+  name: "test-aws-sa"
+  
+  # Only AWS annotations
+  aws:
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/TestRole"
+  
+  # Empty for other clouds
+  azure: {}
+  gcp: {}
+  annotations: {}
+
+podDisruptionBudget:
+  enabled: false
+
+autoscaling:
+  enabled: false

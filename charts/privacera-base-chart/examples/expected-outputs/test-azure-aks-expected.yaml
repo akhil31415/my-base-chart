@@ -1,0 +1,150 @@
+---
+# Source: privacera-base-chart/templates/service-account.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-azure-sa
+  namespace: privacera
+  labels:
+    app: test-azure
+    app.kubernetes.io/name: test-azure
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-azure
+    app.kubernetes.io/part-of: test-azure
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    azure.workload.identity/client-id: 00000000-0000-0000-0000-000000000000
+    azure.workload.identity/tenant-id: 11111111-1111-1111-1111-111111111111
+---
+# Source: privacera-base-chart/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-azure
+  namespace: privacera
+  labels:
+    app: test-azure
+    app.kubernetes.io/name: test-azure
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-azure
+    app.kubernetes.io/part-of: test-azure
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 5959
+      protocol: TCP
+      name: http
+  selector:
+    app: test-azure
+---
+# Source: privacera-base-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-azure
+  namespace: privacera
+  labels:
+    app: test-azure
+    app.kubernetes.io/name: test-azure
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-azure
+    app.kubernetes.io/part-of: test-azure
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: test-azure
+  template:
+    metadata:
+      labels:
+        app: test-azure
+    spec:
+      
+      serviceAccountName: test-azure-sa
+      tolerations:
+        []
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app: test-azure
+      securityContext:
+        enabled: true
+        fsGroup: 200
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: test-azure
+        image: "docker.io/nginx:1.23"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsGroup: 1000
+          runAsNonRoot: true
+          runAsUser: 1000
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        resources:
+          enabled: true
+          limits:
+            cpu: ""
+            memory: 2Gi
+          requests:
+            cpu: 100m
+            memory: 2Gi
+        
+        
+        
+        
+        volumeMounts:
+      restartPolicy: Always
+      volumes:
+---
+# Source: privacera-base-chart/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: test-azure-ingress
+  namespace: privacera
+  labels:
+    app: test-azure
+    app.kubernetes.io/name: test-azure
+    app.kubernetes.io/instance: test-app
+    app.kubernetes.io/component: test-azure
+    app.kubernetes.io/part-of: test-azure
+    app.kubernetes.io/managed-by: Helm
+  ingressClassName: azure-application-gateway
+  annotations:
+    appgw.ingress.kubernetes.io/backend-protocol: http
+    appgw.ingress.kubernetes.io/cookie-based-affinity: "true"
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  rules:
+  - host: test.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: test-azure
+            port:
+              number: 80
