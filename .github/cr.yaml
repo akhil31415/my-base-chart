@@ -2,7 +2,7 @@ owner: evilgenius-jp
 git-repo: my-base-chart
 package-path: .cr-release-packages
 index-path: .cr-index
-charts-repo: https://evilgenius-jp.github.io/my-base-chart
+charts-repo: https://akhil31415.github.io/my-base-chart
 pages-branch: main
 pages-index-path: index.yaml
 release-name-template: "{{ .Name }}-{{ .Version }}"

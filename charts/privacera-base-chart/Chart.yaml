@@ -2,7 +2,7 @@ apiVersion: v2
 name: privacera-base-chart
 description: A comprehensive base Helm chart for microservices with built-in observability, security, and scalability features
 type: application
-version: 1.0.0
+version: 1.0.1
 appVersion: 1.0.0
 icon: https://raw.githubusercontent.com/evilgenius-jp/my-base-chart/main/assets/logo.png
 keywords:
