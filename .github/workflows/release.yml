@@ -41,3 +41,25 @@ jobs:
         config: .github/cr.yaml
       env:
         CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+    - name: Update index.yaml to use GitHub Release URLs
+      run: |
+        if [ -f ".cr-index/index.yaml" ]; then
+          REPO_OWNER="${{ github.repository_owner }}"
+          REPO_NAME=$(echo "${{ github.repository }}" | cut -d'/' -f2)
+          # Replace GitHub Pages URLs with GitHub Release URLs in index.yaml
+          # Pattern: https://owner.github.io/repo/chart-version.tgz -> https://github.com/owner/repo/releases/download/chart-version/chart-version.tgz
+          sed -i.bak "s|https://${REPO_OWNER}.github.io/${REPO_NAME}/\([^/]*\)\.tgz|https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/\1/\1.tgz|g" .cr-index/index.yaml
+          rm -f .cr-index/index.yaml.bak
+          cp .cr-index/index.yaml .
+        fi
+
+    - name: Commit updated index.yaml
+      run: |
+        git add index.yaml || true
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "chore: update index.yaml with GitHub Release URLs" || true
+          git push || true
+        fi
