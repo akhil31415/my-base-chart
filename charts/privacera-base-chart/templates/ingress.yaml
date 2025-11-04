@@ -30,7 +30,7 @@ metadata:
     {{- end }}
 spec:
   rules:
-  - host: {{ tpl $globalIngress.hostname . }}
+  - host: {{ $globalIngress.hostName }}
     http:
       paths:
       - path: {{ $globalIngress.path }}
