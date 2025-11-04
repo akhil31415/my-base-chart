@@ -185,7 +185,7 @@ Global-aware resources configuration
 {{- $local := .Values.resources | default dict -}}
 {{- $merged := merge $local $global -}}
 {{- if $merged }}
-{{- toYaml $merged }}
+{{- omit $merged "enabled" | toYaml }}
 {{- end }}
 {{- end }}
 
@@ -256,7 +256,7 @@ Global-aware security context
 {{- $local := .Values.securityContext | default dict -}}
 {{- $merged := merge $local $global -}}
 {{- if $merged }}
-{{- toYaml $merged }}
+{{- omit $merged "enabled" | toYaml }}
 {{- end }}
 {{- end }}
 

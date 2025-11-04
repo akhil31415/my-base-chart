@@ -9,7 +9,6 @@ metadata:
   labels:
     {{- include "commonLabels" . | nindent 4 }}
   annotations:
-    kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/target-type: ip
     {{- if $globalIngress.internal }}
     alb.ingress.kubernetes.io/scheme: internal
@@ -29,6 +28,7 @@ metadata:
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
+  ingressClassName: alb
   rules:
   - host: {{ $globalIngress.hostName }}
     http:
