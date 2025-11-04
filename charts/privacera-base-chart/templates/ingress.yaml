@@ -11,33 +11,36 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/target-type: ip
-    {{- if .Values.ingress.internal }}
+    {{- if $globalIngress.internal }}
     alb.ingress.kubernetes.io/scheme: internal
     {{- else }}
     alb.ingress.kubernetes.io/scheme: internet-facing
     {{- end }}
-    {{- if and .Values.ingress.certificate .Values.ingress.certificate.arn }}
-    alb.ingress.kubernetes.io/certificate-arn: {{ tpl .Values.ingress.certificate.arn . }}
+    {{- if $globalIngress.subnets }}
+    alb.ingress.kubernetes.io/subnets: {{ $globalIngress.subnets }}
     {{- end }}
-    {{- if and .Values.ingress.group .Values.ingress.group.enabled }}
-    alb.ingress.kubernetes.io/group.name: {{ .Values.ingress.group.name }}
+    {{- if and $globalIngress.certificate $globalIngress.certificate.arn }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ tpl $globalIngress.certificate.arn . }}
     {{- end }}
-    {{- with .Values.ingress.extraAnnotations }}
+    {{- if and $globalIngress.group $globalIngress.group.enabled }}
+    alb.ingress.kubernetes.io/group.name: {{ $globalIngress.group.name }}
+    {{- end }}
+    {{- with $globalIngress.extraAnnotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   rules:
-  - host: {{ tpl .Values.ingress.hostname . }}
+  - host: {{ tpl $globalIngress.hostname . }}
     http:
       paths:
-      - path: {{ .Values.ingress.path }}
-        pathType: {{ .Values.ingress.pathType }}
+      - path: {{ $globalIngress.path }}
+        pathType: {{ $globalIngress.pathType }}
         backend:
           service:
             name: {{ include "fullname" . }}
             port:
               number: {{ .Values.service.port }}
-      {{- range .Values.ingress.extraPaths }}
+      {{- range $globalIngress.extraPaths }}
       - path: {{ .path }}
         pathType: {{ .pathType | default "Prefix" }}
         backend:
@@ -46,7 +49,7 @@ spec:
             port:
               number: {{ .port }}
       {{- end }}
-  {{- range .Values.ingress.extraRules }}
+  {{- range $globalIngress.extraRules }}
   - host: {{ tpl .host $ }}
     http:
       paths:
